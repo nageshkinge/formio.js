@@ -264,7 +264,98 @@ export function checkJsonConditional(component, json, row, data, form, onError) 
     return onError;
   }
 }
+/**
+ * Check if a advanced conditions set evaluates to true.
+ *
+ * @param component
+//  * @param condition
+ * @param row
+ * @param data
+ * @returns {boolean}
+ */
 
+function checkBasicConditonal(component, row, data) {
+  const results = [];
+  component.basicConditional.forEach(function(bc) {
+    let value = null;
+    if (row) {
+      value = getValue({ data: row }, bc.bcWhen);
+    }
+    if (data && _.isNil(value)) {
+      value = getValue({ data }, bc.bcWhen);
+    }
+
+    if (data && _.isNil(value)) {
+      value = getValue({ data: row }, bc.bcWhen);
+    }
+
+    if (_.isNil(value)) {
+      value = '';
+    }
+
+    const bcConditionValue = String(bc.bcConditionValue);
+    const bcCondition = String(bc.bcCondition);
+
+    if (_.isObject(value) && _.has(value, bcConditionValue)) {
+      value = value[bcConditionValue];
+    }
+    else if (Array.isArray(value) && value.map(String).includes(bcConditionValue)) {
+      value = value[bcConditionValue];
+    }
+
+    results.push(applyBasicCondition(value, bcCondition, bcConditionValue));
+  });
+
+  const isShow = component.bcDisplayStatus === 'show' ? true : false;
+
+  if (component.bcDisplayCondition === 'all') {
+    const conditionResult = results.every( v => v === true );
+    return isShow ? conditionResult : !conditionResult;
+  }
+  else if (component.bcDisplayCondition === 'any') {
+    const conditionResult = results.some(function(item) {
+      return item === true;
+    });
+    return isShow ? conditionResult : !conditionResult;
+  }
+
+  return true;
+}
+
+function applyBasicCondition(value, condition, conditionValue) {
+  if (!isNaN(parseFloat(value)) && ['is_greater_than', 'is_less_than'].indexOf(condition) !== -1) {
+    return applyNumberCondition(value, condition, conditionValue);
+  }
+
+  return applyStringCondition(value, condition, conditionValue);
+}
+
+function applyStringCondition(value, condition, conditionValue) {
+  switch (condition) {
+    case 'is':
+      return value.toLowerCase() === conditionValue.toLowerCase();
+    case 'contains':
+      return value.includes(conditionValue);
+    case 'starts_with':
+      return value.startsWith(conditionValue);
+    case 'ends_With':
+      return value.endsWith(conditionValue);
+    default:
+      return false;
+  }
+}
+function applyNumberCondition(value, condition, conditionValue) {
+  switch (condition) {
+    case 'is':
+      return parseFloat(value) === parseFloat(conditionValue);
+    case 'is_greater_than':
+      return parseFloat(value) > parseFloat(conditionValue);
+    case 'is_less_than':
+      return parseFloat(value) < parseFloat(conditionValue);
+    default:
+      return false;
+  }
+}
 /**
  * Checks the conditions for a provided component and data.
  *
@@ -280,6 +371,9 @@ export function checkJsonConditional(component, json, row, data, form, onError) 
 export function checkCondition(component, row, data, form, instance) {
   if (component.customConditional) {
     return checkCustomConditional(component, component.customConditional, row, data, form, 'show', true, instance);
+  }
+  else if (typeof component.basicConditional !== 'undefined' && component.basicConditional.length > 0) {
+    return checkBasicConditonal(component, row, data);
   }
   else if (component.conditional && component.conditional.when) {
     return checkSimpleConditional(component, component.conditional, row, data);
